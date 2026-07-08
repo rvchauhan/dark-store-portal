@@ -20,8 +20,9 @@ function Section({ title, icon, children }: { title: string; icon: string; child
 }
 
 function Field({ label, placeholder, type = "text", span = 6, hint }: any) {
+  const spanMap: Record<number, string> = { 4: "md:col-span-4", 6: "md:col-span-6", 8: "md:col-span-8", 12: "md:col-span-12" };
   return (
-    <div className={`col-span-12 md:col-span-${span}`}>
+    <div className={`col-span-12 ${spanMap[span]}`}>
       <label className="block text-xs font-semibold text-on-surface mb-2 uppercase tracking-wider">
         {label}
       </label>
