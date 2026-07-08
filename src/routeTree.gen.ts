@@ -16,6 +16,8 @@ import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as ManagerOrdersRouteImport } from './routes/manager.orders'
 import { Route as ManagerLedgerRouteImport } from './routes/manager.ledger'
 import { Route as ManagerInventoryRouteImport } from './routes/manager.inventory'
+import { Route as AdminPricingRouteImport } from './routes/admin.pricing'
+import { Route as AdminAnalyticsRouteImport } from './routes/admin.analytics'
 import { Route as AdminMasterCatalogIndexRouteImport } from './routes/admin.master-catalog.index'
 import { Route as AdminInventoryMappingIndexRouteImport } from './routes/admin.inventory-mapping.index'
 import { Route as AdminDarkStoresIndexRouteImport } from './routes/admin.dark-stores.index'
@@ -57,6 +59,16 @@ const ManagerInventoryRoute = ManagerInventoryRouteImport.update({
   path: '/manager/inventory',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminPricingRoute = AdminPricingRouteImport.update({
+  id: '/admin/pricing',
+  path: '/admin/pricing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminAnalyticsRoute = AdminAnalyticsRouteImport.update({
+  id: '/admin/analytics',
+  path: '/admin/analytics',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminMasterCatalogIndexRoute = AdminMasterCatalogIndexRouteImport.update({
   id: '/admin/master-catalog/',
   path: '/admin/master-catalog/',
@@ -87,6 +99,8 @@ const AdminDarkStoresNewRoute = AdminDarkStoresNewRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/admin/analytics': typeof AdminAnalyticsRoute
+  '/admin/pricing': typeof AdminPricingRoute
   '/manager/inventory': typeof ManagerInventoryRoute
   '/manager/ledger': typeof ManagerLedgerRoute
   '/manager/orders': typeof ManagerOrdersRoute
@@ -101,6 +115,8 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/admin/analytics': typeof AdminAnalyticsRoute
+  '/admin/pricing': typeof AdminPricingRoute
   '/manager/inventory': typeof ManagerInventoryRoute
   '/manager/ledger': typeof ManagerLedgerRoute
   '/manager/orders': typeof ManagerOrdersRoute
@@ -116,6 +132,8 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/admin/analytics': typeof AdminAnalyticsRoute
+  '/admin/pricing': typeof AdminPricingRoute
   '/manager/inventory': typeof ManagerInventoryRoute
   '/manager/ledger': typeof ManagerLedgerRoute
   '/manager/orders': typeof ManagerOrdersRoute
@@ -132,6 +150,8 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/admin/analytics'
+    | '/admin/pricing'
     | '/manager/inventory'
     | '/manager/ledger'
     | '/manager/orders'
@@ -146,6 +166,8 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/admin/analytics'
+    | '/admin/pricing'
     | '/manager/inventory'
     | '/manager/ledger'
     | '/manager/orders'
@@ -160,6 +182,8 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/auth'
+    | '/admin/analytics'
+    | '/admin/pricing'
     | '/manager/inventory'
     | '/manager/ledger'
     | '/manager/orders'
@@ -175,6 +199,8 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRoute
+  AdminAnalyticsRoute: typeof AdminAnalyticsRoute
+  AdminPricingRoute: typeof AdminPricingRoute
   ManagerInventoryRoute: typeof ManagerInventoryRoute
   ManagerLedgerRoute: typeof ManagerLedgerRoute
   ManagerOrdersRoute: typeof ManagerOrdersRoute
@@ -238,6 +264,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ManagerInventoryRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/pricing': {
+      id: '/admin/pricing'
+      path: '/admin/pricing'
+      fullPath: '/admin/pricing'
+      preLoaderRoute: typeof AdminPricingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/analytics': {
+      id: '/admin/analytics'
+      path: '/admin/analytics'
+      fullPath: '/admin/analytics'
+      preLoaderRoute: typeof AdminAnalyticsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/master-catalog/': {
       id: '/admin/master-catalog/'
       path: '/admin/master-catalog'
@@ -279,6 +319,8 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRoute,
+  AdminAnalyticsRoute: AdminAnalyticsRoute,
+  AdminPricingRoute: AdminPricingRoute,
   ManagerInventoryRoute: ManagerInventoryRoute,
   ManagerLedgerRoute: ManagerLedgerRoute,
   ManagerOrdersRoute: ManagerOrdersRoute,
