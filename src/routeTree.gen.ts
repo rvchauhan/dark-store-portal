@@ -9,10 +9,13 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SetPasswordRouteImport } from './routes/set-password'
+import { Route as RegisterRouteImport } from './routes/register'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ManagerIndexRouteImport } from './routes/manager.index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
+import { Route as ManagerSettingsRouteImport } from './routes/manager.settings'
 import { Route as ManagerOrdersRouteImport } from './routes/manager.orders'
 import { Route as ManagerLedgerRouteImport } from './routes/manager.ledger'
 import { Route as ManagerInventoryRouteImport } from './routes/manager.inventory'
@@ -23,7 +26,20 @@ import { Route as AdminInventoryMappingIndexRouteImport } from './routes/admin.i
 import { Route as AdminDarkStoresIndexRouteImport } from './routes/admin.dark-stores.index'
 import { Route as AdminSkuNewRouteImport } from './routes/admin.sku.new'
 import { Route as AdminDarkStoresNewRouteImport } from './routes/admin.dark-stores.new'
+import { Route as AdminDarkStoresStoreIdIndexRouteImport } from './routes/admin.dark-stores.$storeId.index'
+import { Route as AdminSkuSkuIdEditRouteImport } from './routes/admin.sku.$skuId.edit'
+import { Route as AdminDarkStoresStoreIdEditRouteImport } from './routes/admin.dark-stores.$storeId.edit'
 
+const SetPasswordRoute = SetPasswordRouteImport.update({
+  id: '/set-password',
+  path: '/set-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RegisterRoute = RegisterRouteImport.update({
+  id: '/register',
+  path: '/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
@@ -42,6 +58,11 @@ const ManagerIndexRoute = ManagerIndexRouteImport.update({
 const AdminIndexRoute = AdminIndexRouteImport.update({
   id: '/admin/',
   path: '/admin/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ManagerSettingsRoute = ManagerSettingsRouteImport.update({
+  id: '/manager/settings',
+  path: '/manager/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ManagerOrdersRoute = ManagerOrdersRouteImport.update({
@@ -95,15 +116,35 @@ const AdminDarkStoresNewRoute = AdminDarkStoresNewRouteImport.update({
   path: '/admin/dark-stores/new',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminDarkStoresStoreIdIndexRoute =
+  AdminDarkStoresStoreIdIndexRouteImport.update({
+    id: '/admin/dark-stores/$storeId/',
+    path: '/admin/dark-stores/$storeId/',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const AdminSkuSkuIdEditRoute = AdminSkuSkuIdEditRouteImport.update({
+  id: '/admin/sku/$skuId/edit',
+  path: '/admin/sku/$skuId/edit',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminDarkStoresStoreIdEditRoute =
+  AdminDarkStoresStoreIdEditRouteImport.update({
+    id: '/admin/dark-stores/$storeId/edit',
+    path: '/admin/dark-stores/$storeId/edit',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/register': typeof RegisterRoute
+  '/set-password': typeof SetPasswordRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/pricing': typeof AdminPricingRoute
   '/manager/inventory': typeof ManagerInventoryRoute
   '/manager/ledger': typeof ManagerLedgerRoute
   '/manager/orders': typeof ManagerOrdersRoute
+  '/manager/settings': typeof ManagerSettingsRoute
   '/admin/': typeof AdminIndexRoute
   '/manager/': typeof ManagerIndexRoute
   '/admin/dark-stores/new': typeof AdminDarkStoresNewRoute
@@ -111,15 +152,21 @@ export interface FileRoutesByFullPath {
   '/admin/dark-stores/': typeof AdminDarkStoresIndexRoute
   '/admin/inventory-mapping/': typeof AdminInventoryMappingIndexRoute
   '/admin/master-catalog/': typeof AdminMasterCatalogIndexRoute
+  '/admin/dark-stores/$storeId/edit': typeof AdminDarkStoresStoreIdEditRoute
+  '/admin/sku/$skuId/edit': typeof AdminSkuSkuIdEditRoute
+  '/admin/dark-stores/$storeId/': typeof AdminDarkStoresStoreIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/register': typeof RegisterRoute
+  '/set-password': typeof SetPasswordRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/pricing': typeof AdminPricingRoute
   '/manager/inventory': typeof ManagerInventoryRoute
   '/manager/ledger': typeof ManagerLedgerRoute
   '/manager/orders': typeof ManagerOrdersRoute
+  '/manager/settings': typeof ManagerSettingsRoute
   '/admin': typeof AdminIndexRoute
   '/manager': typeof ManagerIndexRoute
   '/admin/dark-stores/new': typeof AdminDarkStoresNewRoute
@@ -127,16 +174,22 @@ export interface FileRoutesByTo {
   '/admin/dark-stores': typeof AdminDarkStoresIndexRoute
   '/admin/inventory-mapping': typeof AdminInventoryMappingIndexRoute
   '/admin/master-catalog': typeof AdminMasterCatalogIndexRoute
+  '/admin/dark-stores/$storeId/edit': typeof AdminDarkStoresStoreIdEditRoute
+  '/admin/sku/$skuId/edit': typeof AdminSkuSkuIdEditRoute
+  '/admin/dark-stores/$storeId': typeof AdminDarkStoresStoreIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/register': typeof RegisterRoute
+  '/set-password': typeof SetPasswordRoute
   '/admin/analytics': typeof AdminAnalyticsRoute
   '/admin/pricing': typeof AdminPricingRoute
   '/manager/inventory': typeof ManagerInventoryRoute
   '/manager/ledger': typeof ManagerLedgerRoute
   '/manager/orders': typeof ManagerOrdersRoute
+  '/manager/settings': typeof ManagerSettingsRoute
   '/admin/': typeof AdminIndexRoute
   '/manager/': typeof ManagerIndexRoute
   '/admin/dark-stores/new': typeof AdminDarkStoresNewRoute
@@ -144,17 +197,23 @@ export interface FileRoutesById {
   '/admin/dark-stores/': typeof AdminDarkStoresIndexRoute
   '/admin/inventory-mapping/': typeof AdminInventoryMappingIndexRoute
   '/admin/master-catalog/': typeof AdminMasterCatalogIndexRoute
+  '/admin/dark-stores/$storeId/edit': typeof AdminDarkStoresStoreIdEditRoute
+  '/admin/sku/$skuId/edit': typeof AdminSkuSkuIdEditRoute
+  '/admin/dark-stores/$storeId/': typeof AdminDarkStoresStoreIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/auth'
+    | '/register'
+    | '/set-password'
     | '/admin/analytics'
     | '/admin/pricing'
     | '/manager/inventory'
     | '/manager/ledger'
     | '/manager/orders'
+    | '/manager/settings'
     | '/admin/'
     | '/manager/'
     | '/admin/dark-stores/new'
@@ -162,15 +221,21 @@ export interface FileRouteTypes {
     | '/admin/dark-stores/'
     | '/admin/inventory-mapping/'
     | '/admin/master-catalog/'
+    | '/admin/dark-stores/$storeId/edit'
+    | '/admin/sku/$skuId/edit'
+    | '/admin/dark-stores/$storeId/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/auth'
+    | '/register'
+    | '/set-password'
     | '/admin/analytics'
     | '/admin/pricing'
     | '/manager/inventory'
     | '/manager/ledger'
     | '/manager/orders'
+    | '/manager/settings'
     | '/admin'
     | '/manager'
     | '/admin/dark-stores/new'
@@ -178,15 +243,21 @@ export interface FileRouteTypes {
     | '/admin/dark-stores'
     | '/admin/inventory-mapping'
     | '/admin/master-catalog'
+    | '/admin/dark-stores/$storeId/edit'
+    | '/admin/sku/$skuId/edit'
+    | '/admin/dark-stores/$storeId'
   id:
     | '__root__'
     | '/'
     | '/auth'
+    | '/register'
+    | '/set-password'
     | '/admin/analytics'
     | '/admin/pricing'
     | '/manager/inventory'
     | '/manager/ledger'
     | '/manager/orders'
+    | '/manager/settings'
     | '/admin/'
     | '/manager/'
     | '/admin/dark-stores/new'
@@ -194,16 +265,22 @@ export interface FileRouteTypes {
     | '/admin/dark-stores/'
     | '/admin/inventory-mapping/'
     | '/admin/master-catalog/'
+    | '/admin/dark-stores/$storeId/edit'
+    | '/admin/sku/$skuId/edit'
+    | '/admin/dark-stores/$storeId/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthRoute: typeof AuthRoute
+  RegisterRoute: typeof RegisterRoute
+  SetPasswordRoute: typeof SetPasswordRoute
   AdminAnalyticsRoute: typeof AdminAnalyticsRoute
   AdminPricingRoute: typeof AdminPricingRoute
   ManagerInventoryRoute: typeof ManagerInventoryRoute
   ManagerLedgerRoute: typeof ManagerLedgerRoute
   ManagerOrdersRoute: typeof ManagerOrdersRoute
+  ManagerSettingsRoute: typeof ManagerSettingsRoute
   AdminIndexRoute: typeof AdminIndexRoute
   ManagerIndexRoute: typeof ManagerIndexRoute
   AdminDarkStoresNewRoute: typeof AdminDarkStoresNewRoute
@@ -211,10 +288,27 @@ export interface RootRouteChildren {
   AdminDarkStoresIndexRoute: typeof AdminDarkStoresIndexRoute
   AdminInventoryMappingIndexRoute: typeof AdminInventoryMappingIndexRoute
   AdminMasterCatalogIndexRoute: typeof AdminMasterCatalogIndexRoute
+  AdminDarkStoresStoreIdEditRoute: typeof AdminDarkStoresStoreIdEditRoute
+  AdminSkuSkuIdEditRoute: typeof AdminSkuSkuIdEditRoute
+  AdminDarkStoresStoreIdIndexRoute: typeof AdminDarkStoresStoreIdIndexRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/set-password': {
+      id: '/set-password'
+      path: '/set-password'
+      fullPath: '/set-password'
+      preLoaderRoute: typeof SetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/register': {
+      id: '/register'
+      path: '/register'
+      fullPath: '/register'
+      preLoaderRoute: typeof RegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth': {
       id: '/auth'
       path: '/auth'
@@ -241,6 +335,13 @@ declare module '@tanstack/react-router' {
       path: '/admin'
       fullPath: '/admin/'
       preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/manager/settings': {
+      id: '/manager/settings'
+      path: '/manager/settings'
+      fullPath: '/manager/settings'
+      preLoaderRoute: typeof ManagerSettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/manager/orders': {
@@ -313,17 +414,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminDarkStoresNewRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/dark-stores/$storeId/': {
+      id: '/admin/dark-stores/$storeId/'
+      path: '/admin/dark-stores/$storeId'
+      fullPath: '/admin/dark-stores/$storeId/'
+      preLoaderRoute: typeof AdminDarkStoresStoreIdIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/sku/$skuId/edit': {
+      id: '/admin/sku/$skuId/edit'
+      path: '/admin/sku/$skuId/edit'
+      fullPath: '/admin/sku/$skuId/edit'
+      preLoaderRoute: typeof AdminSkuSkuIdEditRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/dark-stores/$storeId/edit': {
+      id: '/admin/dark-stores/$storeId/edit'
+      path: '/admin/dark-stores/$storeId/edit'
+      fullPath: '/admin/dark-stores/$storeId/edit'
+      preLoaderRoute: typeof AdminDarkStoresStoreIdEditRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthRoute: AuthRoute,
+  RegisterRoute: RegisterRoute,
+  SetPasswordRoute: SetPasswordRoute,
   AdminAnalyticsRoute: AdminAnalyticsRoute,
   AdminPricingRoute: AdminPricingRoute,
   ManagerInventoryRoute: ManagerInventoryRoute,
   ManagerLedgerRoute: ManagerLedgerRoute,
   ManagerOrdersRoute: ManagerOrdersRoute,
+  ManagerSettingsRoute: ManagerSettingsRoute,
   AdminIndexRoute: AdminIndexRoute,
   ManagerIndexRoute: ManagerIndexRoute,
   AdminDarkStoresNewRoute: AdminDarkStoresNewRoute,
@@ -331,6 +456,9 @@ const rootRouteChildren: RootRouteChildren = {
   AdminDarkStoresIndexRoute: AdminDarkStoresIndexRoute,
   AdminInventoryMappingIndexRoute: AdminInventoryMappingIndexRoute,
   AdminMasterCatalogIndexRoute: AdminMasterCatalogIndexRoute,
+  AdminDarkStoresStoreIdEditRoute: AdminDarkStoresStoreIdEditRoute,
+  AdminSkuSkuIdEditRoute: AdminSkuSkuIdEditRoute,
+  AdminDarkStoresStoreIdIndexRoute: AdminDarkStoresStoreIdIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

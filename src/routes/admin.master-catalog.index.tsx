@@ -1,103 +1,151 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { AppShell, PageHeader, StatCard } from "@/components/AppShell";
+import { listSkusApi } from "@/lib/api";
 
 export const Route = createFileRoute("/admin/master-catalog/")({
   component: MasterCatalog,
 });
 
-const products = [
-  { sku: "SKU-1042", name: "Cold Brew Coffee 300ml", cat: "Beverages", price: "£3.20", stores: 32, status: "Live" },
-  { sku: "SKU-1102", name: "Sparkling Water 500ml", cat: "Beverages", price: "£1.10", stores: 41, status: "Live" },
-  { sku: "SKU-2210", name: "Oat Milk 1L", cat: "Dairy", price: "£2.40", stores: 40, status: "Live" },
-  { sku: "SKU-3341", name: "Salted Chips 200g", cat: "Snacks", price: "£1.80", stores: 42, status: "Live" },
-  { sku: "SKU-4408", name: "Dark Chocolate 100g", cat: "Snacks", price: "£2.60", stores: 24, status: "Draft" },
-  { sku: "SKU-5122", name: "Fresh Sourdough Loaf", cat: "Bakery", price: "£3.90", stores: 18, status: "Live" },
-  { sku: "SKU-6031", name: "Pasta Sauce 400g", cat: "Pantry", price: "£2.10", stores: 36, status: "Live" },
-];
-
 function MasterCatalog() {
+  const navigate = useNavigate();
+  const [search, setSearch] = useState("");
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["catalog", "skus"],
+    queryFn: () => listSkusApi(),
+  });
+
+  const products = data?.data ?? [];
+  const live = products.filter((p) => p.status === "active").length;
+  const draft = products.filter((p) => p.status === "draft").length;
+  const archived = products.filter((p) => p.status === "archived").length;
+
+  const q = search.trim().toLowerCase();
+  const visibleProducts = q
+    ? products.filter((p) =>
+        `${p.name} ${p.brand ?? ""} ${p.category ?? ""} ${p.barcode ?? ""} ${p.skuCode ?? ""}`
+          .toLowerCase()
+          .includes(q),
+      )
+    : products;
+
   return (
-    <AppShell role="admin" searchPlaceholder="Search Master Catalog…" primaryAction={{ label: "Add SKU", icon: "add", to: "/admin/sku/new" }}>
+    <AppShell
+      role="admin"
+      searchPlaceholder="Search Master Catalog…"
+      searchValue={search}
+      onSearchChange={setSearch}
+      primaryAction={{ label: "Add SKU", icon: "add", to: "/admin/sku/new" }}
+    >
       <PageHeader
         crumbs={[{ label: "Catalog Management" }, { label: "Master Catalog" }]}
-        title="Global Inventory List"
+        title="Inventory List"
         subtitle="Manage and monitor all stock keeping units across the entire ecosystem."
       />
       <div className="grid grid-cols-1 md:grid-cols-4 gap-5 mb-8">
-        <StatCard icon="inventory_2" label="Total SKUs" value="18,204" delta="+124" />
-        <StatCard icon="check_circle" label="Live" value="17,892" tone="success" />
-        <StatCard icon="edit_note" label="Draft" value="284" />
-        <StatCard icon="block" label="Archived" value="28" tone="warning" />
+        <StatCard icon="inventory_2" label="Total SKUs" value={String(products.length)} />
+        <StatCard icon="check_circle" label="Live" value={String(live)} tone="success" />
+        <StatCard icon="edit_note" label="Draft" value={String(draft)} />
+        <StatCard icon="block" label="Archived" value={String(archived)} tone="warning" />
       </div>
 
       <div className="bg-surface rounded-2xl border border-outline-variant shadow-sm overflow-hidden">
-        <div className="flex justify-between items-center px-6 py-4 border-b border-outline-variant flex-wrap gap-4">
-          <div className="flex gap-2">
-            {["All", "Beverages", "Snacks", "Dairy", "Bakery", "Pantry"].map((t, i) => (
-              <button
-                key={t}
-                className={`px-4 py-1.5 rounded-full text-xs font-semibold ${
-                  i === 0 ? "bg-primary text-primary-foreground" : "bg-surface-container-low text-on-surface-variant hover:text-primary"
-                }`}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
-          <div className="flex gap-2">
-            <button className="px-4 py-2 rounded-full border border-outline-variant text-xs hover:bg-surface-container-low flex items-center gap-1">
-              <span className="material-symbols-outlined text-[16px]">tune</span> Filter
-            </button>
-            <button className="px-4 py-2 rounded-full border border-outline-variant text-xs hover:bg-surface-container-low flex items-center gap-1">
-              <span className="material-symbols-outlined text-[16px]">download</span> Export
-            </button>
-          </div>
+        <div className="flex justify-between items-center px-6 py-4 border-b border-outline-variant">
+          <p className="text-sm text-on-surface-variant">
+            {isLoading
+              ? "Loading catalog…"
+              : q
+                ? `${visibleProducts.length} of ${products.length} SKUs match "${search}"`
+                : `${products.length} SKUs from API`}
+          </p>
+          <Link
+            to="/admin/sku/new"
+            className="px-4 py-2 rounded-full bg-primary text-primary-foreground text-xs font-semibold"
+          >
+            + Add SKU
+          </Link>
         </div>
+
+        {error && (
+          <p className="px-6 py-4 text-sm text-destructive">
+            Failed to load catalog. Is dark-store-api running on :3001?
+          </p>
+        )}
+
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-xs text-on-surface-variant uppercase tracking-wider bg-surface-container-low">
-              <th className="px-6 py-3 font-semibold">SKU</th>
+              <th className="px-6 py-3 font-semibold">Image</th>
+              <th className="px-6 py-3 font-semibold">SKU ID</th>
               <th className="px-6 py-3 font-semibold">Product</th>
               <th className="px-6 py-3 font-semibold">Category</th>
               <th className="px-6 py-3 font-semibold">List Price</th>
-              <th className="px-6 py-3 font-semibold">Stores</th>
+              <th className="px-6 py-3 font-semibold">Barcode</th>
               <th className="px-6 py-3 font-semibold">Status</th>
-              <th className="px-6 py-3" />
             </tr>
           </thead>
           <tbody className="divide-y divide-outline-variant">
-            {products.map((p) => (
-              <tr key={p.sku} className="hover:bg-surface-container-low">
-                <td className="px-6 py-4 font-mono text-xs">{p.sku}</td>
+            {visibleProducts.map((p) => (
+              <tr
+                key={p.id}
+                onClick={() => navigate({ to: "/admin/sku/$skuId/edit", params: { skuId: p.id } })}
+                className="hover:bg-surface-container-low cursor-pointer"
+              >
                 <td className="px-6 py-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center text-primary">
-                      <span className="material-symbols-outlined text-[20px]">shopping_bag</span>
+                  {p.images?.[0] ? (
+                    <img
+                      src={p.images[0]}
+                      alt={p.name}
+                      className="w-14 h-14 rounded-lg object-cover border border-outline-variant"
+                    />
+                  ) : (
+                    <div className="w-14 h-14 rounded-lg bg-surface-container-low border border-outline-variant flex items-center justify-center">
+                      <span className="material-symbols-outlined text-on-surface-variant text-[22px]">
+                        image
+                      </span>
                     </div>
-                    <span className="font-medium text-on-surface">{p.name}</span>
-                  </div>
+                  )}
                 </td>
-                <td className="px-6 py-4 text-on-surface-variant">{p.cat}</td>
-                <td className="px-6 py-4 font-semibold">{p.price}</td>
-                <td className="px-6 py-4">{p.stores}</td>
+                <td className="px-6 py-4 font-mono text-xs text-primary">
+                  {p.skuCode ?? `${p.id.slice(0, 8)}…`}
+                </td>
+                <td className="px-6 py-4">
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium text-on-surface truncate">{p.name}</p>
+                    {p.variants?.length > 0 && (
+                      <span className="shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant">
+                        {p.variants.length} variant{p.variants.length === 1 ? "" : "s"}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-on-surface-variant">{p.brand ?? "—"}</p>
+                </td>
+                <td className="px-6 py-4 text-on-surface-variant">{p.category ?? "—"}</td>
+                <td className="px-6 py-4 font-semibold">${p.basePrice}</td>
+                <td className="px-6 py-4 font-mono text-xs text-on-surface-variant">{p.barcode ?? "—"}</td>
                 <td className="px-6 py-4">
                   <span
-                    className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold ${
-                      p.status === "Live"
+                    className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold capitalize ${
+                      p.status === "active"
                         ? "bg-[oklch(0.62_0.16_155)]/10 text-[oklch(0.4_0.16_155)]"
-                        : "bg-primary/10 text-primary"
+                        : p.status === "draft"
+                          ? "bg-primary/10 text-primary"
+                          : "bg-surface-container-high text-on-surface-variant"
                     }`}
                   >
                     {p.status}
                   </span>
                 </td>
-                <td className="px-6 py-4 text-right">
-                  <button className="p-2 rounded-full hover:bg-surface-container-high text-on-surface-variant">
-                    <span className="material-symbols-outlined text-[18px]">more_horiz</span>
-                  </button>
-                </td>
               </tr>
             ))}
+            {!isLoading && visibleProducts.length === 0 && (
+              <tr>
+                <td colSpan={7} className="px-6 py-10 text-center text-on-surface-variant">
+                  {q ? "No SKUs match your search." : "No SKUs yet — create one from Add SKU."}
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

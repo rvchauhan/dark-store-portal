@@ -1,6 +1,8 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { signOut, useSession } from "@/lib/auth";
+import { getStoreApi } from "@/lib/api";
 import { useEffect } from "react";
 
 type NavItem = { to: string; icon: string; label: string };
@@ -9,7 +11,7 @@ const adminNav: NavItem[] = [
   { to: "/admin", icon: "dashboard", label: "Dashboard" },
   { to: "/admin/master-catalog", icon: "inventory_2", label: "Master Catalog" },
   { to: "/admin/dark-stores", icon: "store", label: "Dark Stores" },
-  { to: "/admin/inventory-mapping", icon: "map_search", label: "Inventory Mapping" },
+  { to: "/admin/inventory-mapping", icon: "map_search", label: "Inventory" },
   { to: "/admin/pricing", icon: "payments", label: "Pricing" },
   { to: "/admin/analytics", icon: "monitoring", label: "Analytics" },
 ];
@@ -17,32 +19,60 @@ const adminNav: NavItem[] = [
 const managerNav: NavItem[] = [
   { to: "/manager", icon: "dashboard", label: "Dashboard" },
   { to: "/manager/inventory", icon: "inventory_2", label: "Inventory" },
-  { to: "/manager/ledger", icon: "receipt_long", label: "Inventory Ledger" },
+  { to: "/manager/ledger", icon: "history", label: "Ledger" },
   { to: "/manager/orders", icon: "shopping_cart", label: "Orders" },
+  { to: "/manager/settings", icon: "settings", label: "Settings" },
 ];
 
 export function AppShell({
   role,
   children,
   searchPlaceholder = "Search…",
+  searchValue,
+  onSearchChange,
   primaryAction,
+  shellTitle,
 }: {
   role: "admin" | "manager";
   children: ReactNode;
   searchPlaceholder?: string;
+  /** Pass together with onSearchChange to make the header search box actually filter this page. */
+  searchValue?: string;
+  onSearchChange?: (v: string) => void;
   primaryAction?: { label: string; icon?: string; to?: string; onClick?: () => void };
+  shellTitle?: string;
 }) {
   const session = useSession();
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const nav = role === "admin" ? adminNav : managerNav;
-  const brand = role === "admin"
-    ? { title: "Q-Commerce", sub: "Central Management", icon: "hub" }
-    : { title: "Dark Store #402", sub: "Active Session", icon: "storefront" };
+
+  // Manager sidebar must show the manager's ACTUAL store, not a hardcoded
+  // placeholder — different managers are scoped to different stores.
+  const storeQuery = useQuery({
+    queryKey: ["store", session?.storeId],
+    queryFn: () => getStoreApi(session!.storeId!),
+    enabled: role === "manager" && Boolean(session?.storeId),
+  });
+
+  const brand =
+    role === "admin"
+      ? { title: "Q-Commerce", sub: "Central Management", icon: "hub" }
+      : {
+          title: storeQuery.data?.name ?? "Loading store…",
+          sub: "Active Session",
+          icon: "storefront",
+        };
+  const initials =
+    session?.name
+      .split(" ")
+      .map((s) => s[0])
+      .join("") ?? "";
 
   useEffect(() => {
     if (!session) navigate({ to: "/auth" });
-    else if (session.role !== role) navigate({ to: session.role === "admin" ? "/admin" : "/manager" });
+    else if (session.role !== role)
+      navigate({ to: session.role === "admin" ? "/admin" : "/manager" });
   }, [session, role, navigate]);
 
   if (!session) return null;
@@ -57,9 +87,16 @@ export function AppShell({
             </div>
             <h1 className="text-xl font-bold text-on-surface tracking-tight">{brand.title}</h1>
           </div>
-          <p className="text-on-surface-variant text-xs ml-11">{brand.sub}</p>
+          {role === "admin" ? (
+            <p className="text-on-surface-variant text-xs ml-11">{brand.sub}</p>
+          ) : (
+            <div className="mt-6 rounded-3xl bg-surface-container-low px-5 py-4">
+              <p className="text-base font-bold text-on-surface">{brand.title}</p>
+              <p className="text-xs text-on-surface-variant mt-1">{brand.sub}</p>
+            </div>
+          )}
         </div>
-        <nav className="flex-1 px-4 space-y-1 mt-2">
+        <nav className="px-4 space-y-1 mt-2">
           {nav.map((item) => {
             const active =
               item.to === `/${role}` ? pathname === item.to : pathname.startsWith(item.to);
@@ -87,7 +124,7 @@ export function AppShell({
         <div className="p-4 mt-auto border-t border-outline-variant">
           <div className="flex items-center gap-3 px-2 py-2">
             <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center text-primary font-bold">
-              {session.name.split(" ").map((s) => s[0]).join("")}
+              {initials}
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-on-surface truncate">{session.name}</p>
@@ -112,6 +149,9 @@ export function AppShell({
       <main className="ml-[260px] min-h-screen flex flex-col">
         <header className="sticky top-0 z-40 h-16 flex justify-between items-center px-6 bg-surface/80 backdrop-blur-md border-b border-outline-variant">
           <div className="flex items-center gap-4 flex-1">
+            {role === "manager" && shellTitle && (
+              <p className="text-2xl font-bold text-on-surface shrink-0 mr-4">{shellTitle}</p>
+            )}
             <div className="relative w-full max-w-md">
               <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[20px]">
                 search
@@ -119,19 +159,25 @@ export function AppShell({
               <input
                 type="text"
                 placeholder={searchPlaceholder}
+                {...(onSearchChange
+                  ? { value: searchValue ?? "", onChange: (e) => onSearchChange(e.target.value) }
+                  : {})}
                 className="w-full bg-surface-container-low border-none rounded-full py-2 pl-10 pr-4 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
               />
             </div>
           </div>
           <div className="flex items-center gap-3">
-            {primaryAction && (
-              primaryAction.to ? (
+            {primaryAction &&
+              role === "admin" &&
+              (primaryAction.to ? (
                 <Link
                   to={primaryAction.to}
                   className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2 rounded-full text-sm font-semibold shadow-md shadow-primary/20 active:scale-95 transition-transform"
                 >
                   {primaryAction.icon && (
-                    <span className="material-symbols-outlined text-[18px]">{primaryAction.icon}</span>
+                    <span className="material-symbols-outlined text-[18px]">
+                      {primaryAction.icon}
+                    </span>
                   )}
                   {primaryAction.label}
                 </Link>
@@ -141,19 +187,41 @@ export function AppShell({
                   className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2 rounded-full text-sm font-semibold shadow-md shadow-primary/20 active:scale-95 transition-transform"
                 >
                   {primaryAction.icon && (
-                    <span className="material-symbols-outlined text-[18px]">{primaryAction.icon}</span>
+                    <span className="material-symbols-outlined text-[18px]">
+                      {primaryAction.icon}
+                    </span>
                   )}
                   {primaryAction.label}
                 </button>
-              )
-            )}
-            <button className="p-2 text-on-surface-variant hover:bg-surface-container-low rounded-full relative">
+              ))}
+            <button
+              className="p-2 text-on-surface-variant hover:bg-surface-container-low rounded-full relative"
+              title="Notifications — coming soon"
+            >
               <span className="material-symbols-outlined">notifications</span>
-              <span className="absolute top-2.5 right-2.5 w-1.5 h-1.5 bg-primary rounded-full" />
             </button>
+            {role === "manager" && (
+              <>
+                <button className="p-2 text-on-surface-variant hover:bg-surface-container-low rounded-full">
+                  <span className="material-symbols-outlined">dark_mode</span>
+                </button>
+                <div className="w-px h-6 bg-outline-variant" />
+                <div className="flex items-center gap-3">
+                  <div className="text-right leading-tight">
+                    <p className="text-sm font-semibold text-on-surface">{session.name}</p>
+                    <p className="text-[10px] uppercase tracking-wider text-primary font-bold">
+                      Store Manager
+                    </p>
+                  </div>
+                  <div className="w-9 h-9 rounded-full bg-primary-container flex items-center justify-center text-primary font-bold">
+                    {initials}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </header>
-        <div className="flex-1 p-8">{children}</div>
+        <div className="flex-1 p-8 flex flex-col min-h-0">{children}</div>
       </main>
     </div>
   );
@@ -164,11 +232,13 @@ export function PageHeader({
   title,
   subtitle,
   actions,
+  badge,
 }: {
   crumbs?: { label: string; to?: string }[];
   title: string;
-  subtitle?: string;
+  subtitle?: ReactNode;
   actions?: ReactNode;
+  badge?: ReactNode;
 }) {
   return (
     <div className="flex justify-between items-end mb-8 gap-4 flex-wrap">
@@ -177,13 +247,20 @@ export function PageHeader({
           <nav className="flex items-center gap-2 text-xs text-on-surface-variant mb-2">
             {crumbs.map((c, i) => (
               <span key={i} className="flex items-center gap-2">
-                {i > 0 && <span className="material-symbols-outlined text-[14px]">chevron_right</span>}
-                <span className={i === crumbs.length - 1 ? "text-primary font-bold" : ""}>{c.label}</span>
+                {i > 0 && (
+                  <span className="material-symbols-outlined text-[14px]">chevron_right</span>
+                )}
+                <span className={i === crumbs.length - 1 ? "text-primary font-bold" : ""}>
+                  {c.label}
+                </span>
               </span>
             ))}
           </nav>
         )}
-        <h2 className="text-3xl font-extrabold text-on-surface tracking-tight">{title}</h2>
+        <div className="flex items-center gap-3">
+          <h2 className="text-3xl font-extrabold text-on-surface tracking-tight">{title}</h2>
+          {badge}
+        </div>
         {subtitle && <p className="text-sm text-on-surface-variant mt-1">{subtitle}</p>}
       </div>
       {actions && <div className="flex gap-3">{actions}</div>}
