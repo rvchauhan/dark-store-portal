@@ -19,6 +19,11 @@ import type {
   NotificationPreferences,
   DashboardStats,
   AnalyticsOverview,
+  StoreConnection,
+  SyncedProduct,
+  SyncedOrder,
+  SyncDashboardStats,
+  SyncMonitoringStats,
 } from "./types";
 
 // --- Auth ---
@@ -382,7 +387,10 @@ export function inventoryMovementApi(
 
 // --- Orders (staff-facing fulfillment) ---
 
-export function listStoreOrdersApi(storeId: string, status: "active" | "all" = "active") {
+export function listStoreOrdersApi(
+  storeId: string,
+  status: "active" | "all" | "fulfilled" = "active",
+) {
   return apiRequest<{ data: StaffOrder[] }>(`/api/stores/${storeId}/orders?status=${status}`);
 }
 
@@ -412,4 +420,77 @@ export function updateOrderStatusApi(
     method: "PATCH",
     body: { status, ...payload },
   });
+}
+
+// --- Multi-store sync ---
+
+export function getSyncStatsApi() {
+  return apiRequest<SyncDashboardStats>("/api/sync/stats");
+}
+
+export function getSyncMonitoringApi() {
+  return apiRequest<SyncMonitoringStats>("/api/sync/monitoring");
+}
+
+export function createVendorInviteApi() {
+  return apiRequest<{ inviteToken: string; connectLink: string; expiresAt: string }>(
+    "/api/sync/invites",
+    { method: "POST" },
+  );
+}
+
+export function listStoreConnectionsApi() {
+  return apiRequest<{ data: StoreConnection[] }>("/api/sync/connections");
+}
+
+export function getStoreConnectionApi(connectionId: string) {
+  return apiRequest<StoreConnection & { productCounts?: unknown[]; recentProducts?: SyncedProduct[] }>(
+    `/api/sync/connections/${connectionId}`,
+  );
+}
+
+export function disconnectStoreConnectionApi(connectionId: string) {
+  return apiRequest<StoreConnection>(`/api/sync/connections/${connectionId}`, { method: "DELETE" });
+}
+
+export function listSyncedProductsApi(
+  connectionId: string,
+  params?: { publishStatus?: string; search?: string; page?: number; limit?: number },
+) {
+  const q = new URLSearchParams();
+  if (params?.publishStatus) q.set("publishStatus", params.publishStatus);
+  if (params?.search) q.set("search", params.search);
+  if (params?.page) q.set("page", String(params.page));
+  if (params?.limit) q.set("limit", String(params.limit));
+  const qs = q.toString();
+  return apiRequest<{ data: SyncedProduct[]; total: number; page: number; limit: number }>(
+    `/api/sync/connections/${connectionId}/products${qs ? `?${qs}` : ""}`,
+  );
+}
+
+export function triggerBulkSyncApi(connectionId: string, limit?: number) {
+  return apiRequest(`/api/sync/connections/${connectionId}/bulk-sync`, {
+    method: "POST",
+    body: limit ? { limit } : {},
+  });
+}
+
+export function publishSyncedProductApi(syncedProductId: string) {
+  return apiRequest<{ syncedProduct: SyncedProduct; sku: unknown }>(
+    `/api/sync/products/${syncedProductId}/publish`,
+    { method: "POST" },
+  );
+}
+
+export function listSyncedOrdersApi(connectionId?: string) {
+  const qs = connectionId ? `?connectionId=${connectionId}` : "";
+  return apiRequest<{ data: SyncedOrder[] }>(`/api/sync/orders${qs}`);
+}
+
+export function connectVendorApi(token: string) {
+  return apiRequest<StoreConnection>("/api/sync/connect", { method: "POST", body: { token } });
+}
+
+export function retrySyncJobApi(jobId: string) {
+  return apiRequest(`/api/sync/jobs/${jobId}/retry`, { method: "POST" });
 }

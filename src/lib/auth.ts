@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { loginApi, registerApi, googleAuthApi, acceptInviteApi } from "./api";
 import { getToken, setToken } from "./api/client";
 import { toPortalRole, type ApiRole, type PortalRole } from "./api/types";
@@ -123,24 +123,18 @@ export async function acceptInvite(token: string, password: string) {
   return session;
 }
 
-/**
- * Demo shortcut still available on the auth page role pills:
- * fills known seed credentials then hits the real API.
- */
-export async function signInAsDemo(role: PortalRole) {
-  const creds =
-    role === "admin"
-      ? { email: "admin@qcommerce.io", password: "abcd123" }
-      : { email: "manager@qcommerce.io", password: "abcd123" };
-  return signIn(creds.email, creds.password);
-}
-
 export function signOut() {
   write(null);
 }
 
-export function useSession(): Session {
-  return useSyncExternalStore(
+/**
+ * Session from localStorage.
+ * Returns `undefined` until the client has hydrated — SSR/getServerSnapshot is
+ * always null, so treating that as logged-out would bounce deep links to /auth
+ * (then to /manager|/admin) on every refresh.
+ */
+export function useSession(): Session | undefined {
+  const session = useSyncExternalStore(
     (cb) => {
       listeners.add(cb);
       const onStorage = () => {
@@ -156,6 +150,14 @@ export function useSession(): Session {
     read,
     () => null,
   );
+
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
+
+  if (!hydrated) return undefined;
+  return session;
 }
 
 /** Ensure token in localStorage stays in sync if session exists (SSR/hydration edge). */

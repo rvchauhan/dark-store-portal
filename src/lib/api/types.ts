@@ -160,11 +160,16 @@ export type LedgerSummary = {
 };
 
 export type OrderStatus =
-  "placed" | "confirmed" | "preparing" | "out_for_delivery" | "delivered" | "cancelled";
+  "placed" | "confirmed" | "preparing" | "out_for_delivery" | "fulfilled" | "cancelled";
+
+export function formatOrderLabel(order: { id: string; orderNumber?: string | null }): string {
+  return order.orderNumber ?? `#${order.id.slice(0, 8)}`;
+}
 
 /** One row of the manager Dashboard/Orders queue — GET /stores/:id/orders */
 export type StaffOrder = {
   id: string;
+  orderNumber: string | null;
   status: OrderStatus;
   paymentMethod: string;
   itemsTotal: string;
@@ -199,6 +204,7 @@ export type StaffOrderItem = {
 
 export type StaffOrderDetail = {
   id: string;
+  orderNumber: string | null;
   storeId: string;
   status: OrderStatus;
   deliveryAddress: {
@@ -268,6 +274,90 @@ export type AnalyticsOverview = {
 };
 
 export type NotificationPreferences = Record<string, boolean>;
+
+// --- Multi-store sync ---
+
+export type StoreConnection = {
+  id: string;
+  sellerBusinessId: string;
+  vendorBusinessId: string;
+  vendorInstallationId: string | null;
+  status: "pending" | "connected" | "disconnected";
+  connectedAt: string | null;
+  disconnectedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  vendorBusiness?: { id: string; name: string };
+  sellerBusiness?: { id: string; name: string };
+  vendorInstallation?: { externalId: string; displayName: string | null; provider: string } | null;
+  _count?: { syncedProducts: number; syncedOrders: number };
+};
+
+export type SyncedProduct = {
+  id: string;
+  connectionId: string;
+  vendorProductId: string;
+  sellerSkuId: string | null;
+  sourceSnapshot: {
+    id?: string;
+    title?: string;
+    description?: string;
+    vendor?: string;
+    productType?: string;
+    variants?: { price?: string | number; sku?: string }[];
+    images?: { src?: string; url?: string }[];
+  };
+  syncStatus: "synced" | "failed" | "unknown";
+  publishStatus: "unpublished" | "published" | "failed";
+  deletedAt: string | null;
+  lastSyncedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  sellerSku?: { id: string; name: string; status: string } | null;
+};
+
+export type SyncedOrder = {
+  id: string;
+  sellerOrderId: string;
+  connectionId: string;
+  sellerLineItems: unknown[];
+  vendorOrderRef: string | null;
+  syncStatus: "routed" | "updated" | "failed";
+  errorMessage: string | null;
+  createdAt: string;
+  updatedAt: string;
+  connection?: StoreConnection;
+};
+
+export type SyncDashboardStats = {
+  connections: number;
+  syncedProducts: number;
+  publishedProducts: number;
+  pendingPublish: number;
+  routedOrders: number;
+  failedJobs: number;
+};
+
+export type SyncMonitoringStats = {
+  queue: { pending: number; processing: number; failed: number };
+  avgSyncDurationMs: number;
+  recentLogs: Array<{
+    id: string;
+    type: string;
+    status: string;
+    message: string | null;
+    durationMs: number | null;
+    createdAt: string;
+    job?: { type: string; status: string } | null;
+  }>;
+  failedJobs: Array<{
+    id: string;
+    type: string;
+    error: string | null;
+    completedAt: string | null;
+    createdAt: string;
+  }>;
+};
 
 export class ApiError extends Error {
   constructor(

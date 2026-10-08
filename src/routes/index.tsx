@@ -10,6 +10,7 @@ function Index() {
   const navigate = useNavigate();
   const session = useSession();
   useEffect(() => {
+    if (session === undefined) return;
     if (!session) navigate({ to: "/auth" });
     else navigate({ to: session.role === "admin" ? "/admin" : "/manager" });
   }, [session, navigate]);

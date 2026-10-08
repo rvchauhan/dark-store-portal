@@ -14,7 +14,7 @@ const STATUS_ORDER: OrderStatus[] = [
   "confirmed",
   "preparing",
   "out_for_delivery",
-  "delivered",
+  "fulfilled",
   "cancelled",
 ];
 
@@ -23,7 +23,7 @@ const STATUS_LABEL: Record<OrderStatus, string> = {
   confirmed: "Confirmed",
   preparing: "Preparing",
   out_for_delivery: "Out for delivery",
-  delivered: "Delivered",
+  fulfilled: "Fulfilled",
   cancelled: "Cancelled",
 };
 
@@ -33,7 +33,7 @@ const STATUS_BAR_CLASS: Record<OrderStatus, string> = {
   confirmed: "bg-on-surface-variant/40",
   preparing: "bg-on-surface-variant/40",
   out_for_delivery: "bg-on-surface-variant/40",
-  delivered: "bg-[oklch(0.62_0.16_155)]",
+  fulfilled: "bg-[oklch(0.62_0.16_155)]",
   cancelled: "bg-destructive",
 };
 

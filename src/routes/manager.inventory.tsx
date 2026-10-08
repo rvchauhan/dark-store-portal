@@ -138,7 +138,7 @@ function Inventory() {
 
       {!storeId && (
         <p className="mb-4 text-sm text-destructive">
-          No store linked to this user. Re-login as manager@qcommerce.io.
+          No store linked to this user. Sign in with a store manager account.
         </p>
       )}
 

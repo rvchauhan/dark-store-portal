@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { AppShell } from "@/components/AppShell";
 import { useSession } from "@/lib/auth";
 import { getOrderStatsApi, listInventoryApi, listStoreOrdersApi } from "@/lib/api";
-import type { OrderStatus, StaffOrder } from "@/lib/api/types";
+import { formatOrderLabel, type OrderStatus, type StaffOrder } from "@/lib/api/types";
 
 export const Route = createFileRoute("/manager/")({
   component: ManagerDashboard,
@@ -14,7 +14,7 @@ const STATUS_LABEL: Record<OrderStatus, string> = {
   confirmed: "Picking in progress",
   preparing: "Packing in progress",
   out_for_delivery: "Out for delivery",
-  delivered: "Delivered",
+  fulfilled: "Fulfilled",
   cancelled: "Cancelled",
 };
 
@@ -23,7 +23,7 @@ const STATUS_TONE: Record<OrderStatus, string> = {
   confirmed: "bg-[oklch(0.96_0.08_90)] text-[oklch(0.5_0.13_85)]",
   preparing: "bg-[oklch(0.96_0.08_90)] text-[oklch(0.5_0.13_85)]",
   out_for_delivery: "bg-[oklch(0.62_0.16_155)]/10 text-[oklch(0.4_0.16_155)]",
-  delivered: "bg-surface-container-high text-on-surface-variant",
+  fulfilled: "bg-surface-container-high text-on-surface-variant",
   cancelled: "bg-destructive/10 text-destructive",
 };
 
@@ -95,6 +95,13 @@ function ManagerDashboard() {
     refetchInterval: 30000,
   });
 
+  const fulfilledQuery = useQuery({
+    queryKey: ["orders", storeId, "fulfilled"],
+    queryFn: () => listStoreOrdersApi(storeId!, "fulfilled"),
+    enabled: Boolean(storeId),
+    refetchInterval: 60000,
+  });
+
   const inventoryQuery = useQuery({
     queryKey: ["inventory", storeId],
     queryFn: () => listInventoryApi(storeId!),
@@ -103,6 +110,7 @@ function ManagerDashboard() {
 
   const totalActiveOrders = ordersQuery.data?.data.length ?? 0;
   const attentionOrders = (ordersQuery.data?.data ?? []).slice(0, 3);
+  const recentFulfilled = (fulfilledQuery.data?.data ?? []).slice(0, 5);
   const inventoryRows = inventoryQuery.data?.data ?? [];
   const lowStockRows = inventoryRows.filter((r) => r.availableQty < r.reorderThreshold);
   const criticalStock = [...lowStockRows]
@@ -184,6 +192,7 @@ function ManagerDashboard() {
             </div>
             <Link
               to="/manager/orders"
+              search={{ tab: "active" }}
               className="text-sm font-semibold text-primary hover:opacity-80"
             >
               View All Active
@@ -203,6 +212,7 @@ function ManagerDashboard() {
                 return (
                   <Link
                     to="/manager/orders"
+                    search={{ tab: "active" }}
                     key={order.id}
                     className={`grid grid-cols-[auto_minmax(0,1.2fr)_minmax(120px,0.8fr)_96px_auto] items-center gap-4 px-6 py-5 hover:bg-surface-container-low transition-colors ${
                       index < attentionOrders.length - 1 ? "border-b border-outline-variant" : ""
@@ -219,7 +229,7 @@ function ManagerDashboard() {
                     </div>
                     <div>
                       <p className="text-[28px] leading-none font-extrabold text-on-surface tracking-tight">
-                        #{order.id.slice(0, 8)}
+                        {formatOrderLabel(order)}
                       </p>
                       <p className="text-sm text-on-surface-variant mt-1">{orderMeta(order)}</p>
                     </div>
@@ -327,6 +337,67 @@ function ManagerDashboard() {
           </Link>
         </section>
       </div>
+
+      <section className="bg-surface rounded-[28px] border border-outline-variant shadow-sm overflow-hidden mt-5">
+        <div className="flex items-center justify-between px-6 py-5 border-b border-outline-variant">
+          <h3 className="font-bold text-on-surface text-lg">Recently Fulfilled</h3>
+          
+          <Link
+            to="/manager/orders"
+            search={{ tab: "fulfilled" }}
+            className="text-sm font-semibold text-primary hover:opacity-80"
+          >
+            View All Fulfilled
+          </Link>
+        </div>
+        <div>
+          {fulfilledQuery.isLoading ? (
+            <p className="px-6 py-8 text-sm text-on-surface-variant">Loading…</p>
+          ) : recentFulfilled.length === 0 ? (
+            <p className="px-6 py-8 text-sm text-on-surface-variant">
+              No fulfilled or cancelled orders yet.
+            </p>
+          ) : (
+            recentFulfilled.map((order, index) => (
+              <Link
+                key={order.id}
+                to="/manager/orders"
+                search={{ tab: "fulfilled" }}
+                className={`grid grid-cols-[minmax(0,1.2fr)_minmax(120px,0.8fr)_auto_auto] items-center gap-4 px-6 py-5 hover:bg-surface-container-low transition-colors ${
+                  index < recentFulfilled.length - 1 ? "border-b border-outline-variant" : ""
+                }`}
+              >
+                <div>
+                  <p className="text-xl font-extrabold text-on-surface tracking-tight">
+                    {formatOrderLabel(order)}
+                  </p>
+                  <p className="text-sm text-on-surface-variant mt-1">
+                    {order.customerName} • {orderMeta(order)}
+                  </p>
+                </div>
+                <div>
+                  <span
+                    className={`inline-flex items-center justify-center px-4 py-2 rounded-full text-xs font-semibold ${STATUS_TONE[order.status]}`}
+                  >
+                    {STATUS_LABEL[order.status]}
+                  </span>
+                </div>
+                <p className="text-sm text-on-surface-variant">
+                  {new Date(order.updatedAt).toLocaleString([], {
+                    month: "short",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </p>
+                <span className="text-on-surface-variant">
+                  <span className="material-symbols-outlined">chevron_right</span>
+                </span>
+              </Link>
+            ))
+          )}
+        </div>
+      </section>
     </AppShell>
   );
 }

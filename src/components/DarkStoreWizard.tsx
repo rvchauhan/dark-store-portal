@@ -158,8 +158,8 @@ export function DarkStoreWizard({
   }, [storeQuery.data]);
 
   const skusQuery = useQuery({
-    queryKey: ["catalog", "skus"],
-    queryFn: () => listSkusApi(),
+    queryKey: ["catalog", "skus", "active"],
+    queryFn: () => listSkusApi({ status: "active" }),
     enabled: step === 3,
   });
 
@@ -189,16 +189,16 @@ export function DarkStoreWizard({
   // Seed local draft rows once catalog + existing mappings are available
   useEffect(() => {
     if (step !== 3 || !skusQuery.data) return;
-    const skus = skusQuery.data.data;
+    const skus = skusQuery.data.data.filter((sku) => sku.status === "active");
     const mappings = mappingsQuery.data?.data ?? [];
     const bySku = new Map(mappings.map((m) => [m.skuId, m]));
 
     setDrafts((prev) => {
-      const next: Record<string, DraftRow> = { ...prev };
+      const next: Record<string, DraftRow> = {};
       for (const sku of skus) {
-        if (next[sku.id]) continue;
         const existing = bySku.get(sku.id);
-        next[sku.id] = {
+        const prior = prev[sku.id];
+        next[sku.id] = prior ?? {
           skuId: sku.id,
           enabled: existing?.isListed ?? false,
           price: existing?.priceOverride ?? sku.basePrice ?? "",
@@ -211,14 +211,15 @@ export function DarkStoreWizard({
     });
   }, [step, skusQuery.data, mappingsQuery.data]);
 
-  const skus = skusQuery.data?.data ?? [];
+  const skus = (skusQuery.data?.data ?? []).filter((sku) => sku.status === "active");
   const mappedCount = Object.values(drafts).filter((d) => d.enabled).length;
   const totalCount = skus.length;
 
   const persistMappings = async (activate: boolean) => {
     if (!storeId) throw new Error("Store not created yet");
 
-    const enabled = Object.values(drafts).filter((d) => d.enabled);
+    const activeIds = new Set(skus.map((s) => s.id));
+    const enabled = Object.values(drafts).filter((d) => d.enabled && activeIds.has(d.skuId));
     if (enabled.length > 0) {
       const reorderBySku = new Map(skus.map((s) => [s.id, s.defaultReorderPoint]));
       await bulkSkuMappingsApi(storeId, {

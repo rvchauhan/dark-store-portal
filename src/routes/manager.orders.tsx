@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -10,7 +10,7 @@ import {
   listStoreOrdersApi,
   updateOrderStatusApi,
 } from "@/lib/api";
-import { ApiError, type OrderStatus, type StaffOrder, type StaffOrderItem } from "@/lib/api/types";
+import { ApiError, formatOrderLabel, type OrderStatus, type StaffOrder, type StaffOrderItem } from "@/lib/api/types";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -42,7 +42,12 @@ function errorMessage(err: unknown, fallback: string) {
   return err instanceof ApiError || err instanceof Error ? err.message : fallback;
 }
 
+type OrdersTab = "active" | "fulfilled";
+
 export const Route = createFileRoute("/manager/orders")({
+  validateSearch: (search: Record<string, unknown>): { tab: OrdersTab } => ({
+    tab: search.tab === "fulfilled" ? "fulfilled" : "active",
+  }),
   component: Orders,
 });
 
@@ -51,7 +56,7 @@ const STAGE_LABEL: Record<OrderStatus, string> = {
   confirmed: "Confirmed",
   preparing: "Preparing",
   out_for_delivery: "Shipped",
-  delivered: "Delivered",
+  fulfilled: "Fulfilled",
   cancelled: "Cancelled",
 };
 
@@ -60,7 +65,7 @@ const STAGE_WIDTH: Record<OrderStatus, string> = {
   confirmed: "35%",
   preparing: "70%",
   out_for_delivery: "90%",
-  delivered: "100%",
+  fulfilled: "100%",
   cancelled: "100%",
 };
 
@@ -68,40 +73,11 @@ const NEXT_ACTION: Partial<Record<OrderStatus, { label: string; next: OrderStatu
   placed: { label: "Accept Order", next: "confirmed" },
   confirmed: { label: "Start Preparation", next: "preparing" },
   preparing: { label: "Mark Ready", next: "out_for_delivery" },
-  out_for_delivery: { label: "Mark Delivered", next: "delivered" },
+  out_for_delivery: { label: "Mark Fulfilled", next: "fulfilled" },
 };
 
 /** Statuses the manager portal still lets a store reject/cancel from (mirrors ALLOWED_TRANSITIONS on the API). */
 const REJECTABLE_STATUSES = new Set<OrderStatus>(["placed", "confirmed", "preparing"]);
-
-/** Packing checklist driven by what's actually in the order, not a fixed list shown for every order. */
-function checklistFor(items: StaffOrderItem[]) {
-  const checklist: { title: string; note: string }[] = [];
-  if (items.some((item) => item.requiresColdStorage)) {
-    checklist.push({
-      title: "Cold chain bag used",
-      note: "Order contains items requiring cold storage",
-    });
-  }
-  if (items.some((item) => item.isFragile)) {
-    checklist.push({
-      title: "Fragile items secured",
-      note: "Order contains fragile items — bubble wrap required",
-    });
-  }
-  const totalWeightKg = items.reduce(
-    (sum, item) => sum + (item.weightKg ? Number(item.weightKg) * item.quantity : 0),
-    0,
-  );
-  if (totalWeightKg > 3) {
-    checklist.push({
-      title: "Bag handle reinforced",
-      note: `Heavy order detected (${totalWeightKg.toFixed(1)}kg)`,
-    });
-  }
-  checklist.push({ title: "Order receipt included", note: "Physical copy or QR tag" });
-  return checklist;
-}
 
 /** Deterministic cosmetic aisle/bin per SKU — no bin-location data exists in the schema yet. */
 function locationFor(skuId: string): string[] {
@@ -117,6 +93,8 @@ function Orders() {
   const session = useSession();
   const storeId = session?.storeId;
   const queryClient = useQueryClient();
+  const navigate = useNavigate({ from: Route.fullPath });
+  const { tab } = Route.useSearch();
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [detailItem, setDetailItem] = useState<StaffOrderItem | null>(null);
   const [reportMissingOpen, setReportMissingOpen] = useState(false);
@@ -124,20 +102,36 @@ function Orders() {
   const [trackingNumber, setTrackingNumber] = useState("");
   const [trackingUrl, setTrackingUrl] = useState("");
 
+  const isFulfilledTab = tab === "fulfilled";
+
   const ordersQuery = useQuery({
-    queryKey: ["orders", storeId, "active"],
-    queryFn: () => listStoreOrdersApi(storeId!, "active"),
+    queryKey: ["orders", storeId, tab],
+    queryFn: () => listStoreOrdersApi(storeId!, tab),
     enabled: Boolean(storeId),
-    refetchInterval: 30000,
+    refetchInterval: isFulfilledTab ? false : 30000,
   });
 
-  const activeOrders = ordersQuery.data?.data ?? [];
+  const queueOrders = ordersQuery.data?.data ?? [];
 
+  const setTab = (next: OrdersTab) => {
+    setSelectedOrderId(null);
+    setDetailItem(null);
+    void navigate({ search: { tab: next } });
+  };
+
+  // Keep selection in sync with the current tab's queue. Clears stale IDs when
+  // switching Active ↔ Fulfilled so the detail panes don't keep the old order.
   useEffect(() => {
-    if (!selectedOrderId && ordersQuery.data && ordersQuery.data.data.length > 0) {
+    if (ordersQuery.isLoading || !ordersQuery.data) return;
+    const ids = new Set(ordersQuery.data.data.map((o) => o.id));
+    if (selectedOrderId && !ids.has(selectedOrderId)) {
+      setSelectedOrderId(ordersQuery.data.data[0]?.id ?? null);
+      return;
+    }
+    if (!selectedOrderId && ordersQuery.data.data.length > 0) {
       setSelectedOrderId(ordersQuery.data.data[0].id);
     }
-  }, [selectedOrderId, ordersQuery.data]);
+  }, [ordersQuery.data, ordersQuery.isLoading, selectedOrderId, tab]);
 
   const orderDetailQuery = useQuery({
     queryKey: ["order", storeId, selectedOrderId],
@@ -145,15 +139,26 @@ function Orders() {
     enabled: Boolean(storeId && selectedOrderId),
   });
 
-  const detail = orderDetailQuery.data;
-  const nextAction = detail ? NEXT_ACTION[detail.order.status] : undefined;
+  // React Query keeps previous `data` when the query is disabled (no selection),
+  // so only render detail that matches the current selection.
+  const detail =
+    selectedOrderId && orderDetailQuery.data?.order.id === selectedOrderId
+      ? orderDetailQuery.data
+      : undefined;
+  const nextAction = detail && !isFulfilledTab ? NEXT_ACTION[detail.order.status] : undefined;
+  const isTerminal =
+    detail?.order.status === "fulfilled" || detail?.order.status === "cancelled";
 
-  // Tracking fields carry over from the order once assigned; reset for a fresh order.
   useEffect(() => {
     setTrackingName(detail?.order.trackingName ?? "");
     setTrackingNumber(detail?.order.trackingNumber ?? "");
     setTrackingUrl(detail?.order.trackingUrl ?? "");
-  }, [detail?.order.id, detail?.order.trackingName, detail?.order.trackingNumber, detail?.order.trackingUrl]);
+  }, [
+    detail?.order.id,
+    detail?.order.trackingName,
+    detail?.order.trackingNumber,
+    detail?.order.trackingUrl,
+  ]);
 
   const items = detail?.items ?? [];
   const trackingAssigned = Boolean(
@@ -164,6 +169,9 @@ function Orders() {
     if (!detail || !nextAction) return null;
     if (detail.order.status === "preparing") {
       if (!trackingAssigned) return "Fill tracking name, number, and URL before marking ready.";
+      if (!/^https?:\/\/[^\s/]+\.[^\s]+$/i.test(trackingUrl.trim())) {
+        return "Enter a valid tracking URL starting with http:// or https://.";
+      }
     }
     return null;
   })();
@@ -186,11 +194,12 @@ function Orders() {
       queryClient.invalidateQueries({ queryKey: ["orders", storeId] });
       queryClient.invalidateQueries({ queryKey: ["order-stats", storeId] });
       queryClient.invalidateQueries({ queryKey: ["order", storeId, selectedOrderId] });
-      // Order left the active queue — move on to the next one waiting instead
-      // of leaving the manager staring at a completed order.
-      if (updated.status === "delivered" || updated.status === "cancelled") {
-        const remaining = activeOrders.filter((o) => o.id !== selectedOrderId);
-        setSelectedOrderId(remaining[0]?.id ?? null);
+      if (updated.status === "fulfilled" || updated.status === "cancelled") {
+        toast.success(
+          updated.status === "fulfilled" ? "Order marked fulfilled" : "Order cancelled",
+        );
+        void navigate({ search: { tab: "fulfilled" } });
+        setSelectedOrderId(updated.id);
       }
     },
     onError: (err) => toast.error(errorMessage(err, "Failed to update order status")),
@@ -204,22 +213,49 @@ function Orders() {
     >
       <div className="grid grid-cols-1 xl:grid-cols-[290px_minmax(0,1fr)_300px] gap-5 items-start">
         <section className="bg-surface rounded-[28px] border border-outline-variant shadow-sm p-5 min-h-190">
-          <div className="flex items-center justify-between mb-5">
-            <h2 className="text-3xl font-bold tracking-tight text-on-surface">Active Orders</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-3xl font-bold tracking-tight text-on-surface">Orders</h2>
             <span className="px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-semibold">
-              {activeOrders.length} Queue
+              {queueOrders.length} {isFulfilledTab ? "Done" : "Queue"}
             </span>
+          </div>
+
+          <div className="flex gap-1 p-1 rounded-2xl bg-surface-container-low mb-5">
+            <button
+              type="button"
+              onClick={() => setTab("active")}
+              className={`flex-1 px-3 py-2 rounded-xl text-sm font-semibold transition-colors ${
+                !isFulfilledTab
+                  ? "bg-surface text-on-surface shadow-sm"
+                  : "text-on-surface-variant hover:text-on-surface"
+              }`}
+            >
+              Active
+            </button>
+            <button
+              type="button"
+              onClick={() => setTab("fulfilled")}
+              className={`flex-1 px-3 py-2 rounded-xl text-sm font-semibold transition-colors ${
+                isFulfilledTab
+                  ? "bg-surface text-on-surface shadow-sm"
+                  : "text-on-surface-variant hover:text-on-surface"
+              }`}
+            >
+              Fulfilled
+            </button>
           </div>
 
           <div className="space-y-4">
             {ordersQuery.isLoading ? (
               <p className="text-sm text-on-surface-variant">Loading…</p>
-            ) : activeOrders.length === 0 ? (
-              <p className="text-sm text-on-surface-variant">No active orders right now.</p>
+            ) : queueOrders.length === 0 ? (
+              <p className="text-sm text-on-surface-variant">
+                {isFulfilledTab ? "No fulfilled orders yet." : "No active orders right now."}
+              </p>
             ) : (
-              activeOrders.map((order: StaffOrder) => {
+              queueOrders.map((order: StaffOrder) => {
                 const active = order.id === selectedOrderId;
-                const done = order.status === "delivered";
+                const done = order.status === "fulfilled" || order.status === "cancelled";
                 return (
                   <button
                     key={order.id}
@@ -232,14 +268,18 @@ function Orders() {
                     }`}
                   >
                     <div className="flex items-center justify-between gap-3">
-                      <p className="font-bold text-on-surface">#{order.id.slice(0, 8)}</p>
+                      <p className="font-bold text-on-surface">{formatOrderLabel(order)}</p>
                       <span
                         className={`px-2.5 py-1 rounded-full text-[10px] uppercase tracking-[0.14em] font-bold ${
-                          order.status === "confirmed"
-                            ? "bg-[oklch(0.9_0.08_95)] text-[oklch(0.5_0.13_85)]"
-                            : order.status === "preparing"
-                              ? "bg-primary text-primary-foreground"
-                              : "bg-surface-container-high text-on-surface-variant"
+                          order.status === "fulfilled"
+                            ? "bg-primary/10 text-primary"
+                            : order.status === "cancelled"
+                              ? "bg-destructive/10 text-destructive"
+                              : order.status === "confirmed"
+                                ? "bg-[oklch(0.9_0.08_95)] text-[oklch(0.5_0.13_85)]"
+                                : order.status === "preparing"
+                                  ? "bg-primary text-primary-foreground"
+                                  : "bg-surface-container-high text-on-surface-variant"
                         }`}
                       >
                         {STAGE_LABEL[order.status]}
@@ -256,7 +296,11 @@ function Orders() {
                           done ? "text-on-surface-variant" : "text-destructive font-semibold"
                         }
                       >
-                        {new Date(order.createdAt).toLocaleTimeString([], {
+                        {new Date(
+                          isFulfilledTab ? order.updatedAt : order.createdAt,
+                        ).toLocaleString([], {
+                          month: "short",
+                          day: "numeric",
                           hour: "2-digit",
                           minute: "2-digit",
                         })}
@@ -283,30 +327,47 @@ function Orders() {
         <section className="bg-surface rounded-[28px] border border-outline-variant shadow-sm overflow-hidden min-h-190">
           {!detail ? (
             <p className="p-6 text-sm text-on-surface-variant">
-              {orderDetailQuery.isLoading ? "Loading order…" : "Select an order from the queue."}
+              {orderDetailQuery.isLoading
+                ? "Loading order…"
+                : isFulfilledTab
+                  ? "Select a fulfilled order to review."
+                  : "Select an order from the queue."}
             </p>
           ) : (
             <>
               <div className="flex items-start justify-between gap-4 px-6 py-5 border-b border-outline-variant">
                 <div>
-                  <div className="flex items-center gap-2 text-sm text-on-surface-variant mb-2">
+                  <div className="flex items-center gap-2 text-sm text-on-surface-variant mb-2 flex-wrap">
                     <span className="px-3 py-1 rounded-full bg-primary/10 text-primary font-semibold">
-                      Order #{detail.order.id.slice(0, 8)}
+                      Order {formatOrderLabel(detail.order)}
                     </span>
                     <span>• Customer: {detail.order.customerName}</span>
+                    {isTerminal ? (
+                      <span
+                        className={`px-2.5 py-1 rounded-full text-[10px] uppercase tracking-[0.14em] font-bold ${
+                          detail.order.status === "fulfilled"
+                            ? "bg-primary/10 text-primary"
+                            : "bg-destructive/10 text-destructive"
+                        }`}
+                      >
+                        {STAGE_LABEL[detail.order.status]}
+                      </span>
+                    ) : null}
                   </div>
                   <h2 className="text-3xl font-bold tracking-tight text-on-surface">
-                    Picking List ({detail.items.length} Items)
+                    {isTerminal ? "Order Summary" : "Picking List"} ({detail.items.length} Items)
                   </h2>
                 </div>
                 <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setReportMissingOpen(true)}
-                    className="px-4 py-3 rounded-2xl border border-outline-variant text-sm font-medium text-on-surface hover:bg-surface-container-low"
-                  >
-                    Report Missing
-                  </button>
+                  {!isTerminal ? (
+                    <button
+                      type="button"
+                      onClick={() => setReportMissingOpen(true)}
+                      className="px-4 py-3 rounded-2xl border border-outline-variant text-sm font-medium text-on-surface hover:bg-surface-container-low"
+                    >
+                      Report Missing
+                    </button>
+                  ) : null}
                   {REJECTABLE_STATUSES.has(detail.order.status) && (
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
@@ -321,7 +382,7 @@ function Orders() {
                       <AlertDialogContent>
                         <AlertDialogHeader>
                           <AlertDialogTitle>
-                            Reject order #{detail.order.id.slice(0, 8)}?
+                            Reject order {formatOrderLabel(detail.order)}?
                           </AlertDialogTitle>
                           <AlertDialogDescription>
                             This cancels the order for {detail.order.customerName} and cannot be
@@ -429,7 +490,7 @@ function Orders() {
             <section className="bg-surface rounded-[28px] border border-outline-variant shadow-sm p-5">
               <h2 className="text-3xl font-bold tracking-tight text-on-surface">Order Details</h2>
               <p className="text-sm text-on-surface-variant mt-2">
-                {`Order #${detail.order.id.slice(0, 8)} • ${detail.order.customerName}`}
+                {`Order ${formatOrderLabel(detail.order)} • ${detail.order.customerName}`}
               </p>
 
               <div className="mt-8 space-y-6">
@@ -440,7 +501,9 @@ function Orders() {
                   <p className="text-sm text-on-surface font-semibold">{detail.order.customerName}</p>
                   <p className="text-sm text-on-surface-variant mt-2">
                     {detail.order.deliveryAddress.line1}
-                    {detail.order.deliveryAddress.line2 ? `, ${detail.order.deliveryAddress.line2}` : ""}
+                    {detail.order.deliveryAddress.line2
+                      ? `, ${detail.order.deliveryAddress.line2}`
+                      : ""}
                   </p>
                   <p className="text-sm text-on-surface-variant">
                     {detail.order.deliveryAddress.city}, {detail.order.deliveryAddress.postalCode}
@@ -455,92 +518,125 @@ function Orders() {
                     Tracking Details
                   </h3>
                   {detail.order.status === "preparing" ? (
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-xs uppercase tracking-[0.16em] text-on-surface-variant font-semibold mb-2">
-                        Tracking service name
-                      </label>
-                      <input
-                        type="text"
-                        value={trackingName}
-                        onChange={(e) => setTrackingName(e.target.value)}
-                        placeholder="e.g. Delhivery, XpressBee"
-                        className="w-full bg-surface-container-low border border-outline-variant rounded-2xl px-4 py-3 text-sm text-on-surface focus:ring-2 focus:ring-primary/20 outline-none"
-                      />
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-xs uppercase tracking-[0.16em] text-on-surface-variant font-semibold mb-2">
+                          Tracking service name
+                        </label>
+                        <input
+                          type="text"
+                          value={trackingName}
+                          onChange={(e) => setTrackingName(e.target.value)}
+                          placeholder="e.g. Delhivery, XpressBee"
+                          className="w-full bg-surface-container-low border border-outline-variant rounded-2xl px-4 py-3 text-sm text-on-surface focus:ring-2 focus:ring-primary/20 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs uppercase tracking-[0.16em] text-on-surface-variant font-semibold mb-2">
+                          Tracking number
+                        </label>
+                        <input
+                          type="text"
+                          value={trackingNumber}
+                          onChange={(e) => setTrackingNumber(e.target.value)}
+                          placeholder="Enter tracking number"
+                          className="w-full bg-surface-container-low border border-outline-variant rounded-2xl px-4 py-3 text-sm text-on-surface focus:ring-2 focus:ring-primary/20 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs uppercase tracking-[0.16em] text-on-surface-variant font-semibold mb-2">
+                          Tracking URL
+                        </label>
+                        <input
+                          type="url"
+                          value={trackingUrl}
+                          onChange={(e) => setTrackingUrl(e.target.value)}
+                          placeholder="https://..."
+                          className="w-full bg-surface-container-low border border-outline-variant rounded-2xl px-4 py-3 text-sm text-on-surface focus:ring-2 focus:ring-primary/20 outline-none"
+                        />
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-xs uppercase tracking-[0.16em] text-on-surface-variant font-semibold mb-2">
-                        Tracking number
-                      </label>
-                      <input
-                        type="text"
-                        value={trackingNumber}
-                        onChange={(e) => setTrackingNumber(e.target.value)}
-                        placeholder="Enter tracking number"
-                        className="w-full bg-surface-container-low border border-outline-variant rounded-2xl px-4 py-3 text-sm text-on-surface focus:ring-2 focus:ring-primary/20 outline-none"
-                      />
+                  ) : (
+                    <div className="space-y-2 text-sm text-on-surface">
+                      {detail.order.trackingName && (
+                        <p>
+                          <span className="font-semibold">Tracking:</span>{" "}
+                          {detail.order.trackingName}
+                        </p>
+                      )}
+                      {detail.order.trackingNumber && (
+                        <p>
+                          <span className="font-semibold">Tracking ID:</span>{" "}
+                          {detail.order.trackingNumber}
+                        </p>
+                      )}
+                      {detail.order.trackingUrl && (
+                        <p>
+                          <span className="font-semibold">Tracking link:</span>{" "}
+                          <a
+                            href={detail.order.trackingUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-primary hover:underline"
+                          >
+                            View status
+                          </a>
+                        </p>
+                      )}
+                      {!detail.order.trackingName &&
+                        !detail.order.trackingNumber &&
+                        !detail.order.trackingUrl && (
+                          <p className="text-on-surface-variant">No tracking details recorded.</p>
+                        )}
                     </div>
-                    <div>
-                      <label className="block text-xs uppercase tracking-[0.16em] text-on-surface-variant font-semibold mb-2">
-                        Tracking URL
-                      </label>
-                      <input
-                        type="url"
-                        value={trackingUrl}
-                        onChange={(e) => setTrackingUrl(e.target.value)}
-                        placeholder="https://..."
-                        className="w-full bg-surface-container-low border border-outline-variant rounded-2xl px-4 py-3 text-sm text-on-surface focus:ring-2 focus:ring-primary/20 outline-none"
-                      />
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-2 text-sm text-on-surface">
-                    {detail.order.trackingName && (
-                      <p>
-                        <span className="font-semibold">Tracking:</span> {detail.order.trackingName}
-                      </p>
-                    )}
-                    {detail.order.trackingNumber && (
-                      <p>
-                        <span className="font-semibold">Tracking ID:</span> {detail.order.trackingNumber}
-                      </p>
-                    )}
-                    {detail.order.trackingUrl && (
-                      <p>
-                        <span className="font-semibold">Tracking link:</span>{" "}
-                        <a
-                          href={detail.order.trackingUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-primary hover:underline"
-                        >
-                          View status
-                        </a>
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
+                  )}
+                </div>
 
-            {nextAction && detail && (
-              <>
-                <button
-                  type="button"
-                  disabled={advanceStatus.isPending || Boolean(blockedReason)}
-                  onClick={() => advanceStatus.mutate(nextAction.next)}
-                  className="w-full mt-8 flex items-center justify-center gap-3 px-6 py-5 rounded-full bg-primary text-primary-foreground text-xl font-semibold shadow-lg shadow-primary/20 disabled:opacity-50"
-                >
-                  <span className="material-symbols-outlined">local_shipping</span>
-                  {nextAction.label}
-                </button>
-                {blockedReason && (
-                  <p className="text-xs text-destructive text-center mt-3">{blockedReason}</p>
-                )}
-              </>
-            )}
-          </section>
-        )}
+                {isTerminal ? (
+                  <div className="rounded-3xl border border-outline-variant bg-surface-container-low p-5">
+                    <h3 className="text-sm uppercase tracking-[0.16em] text-on-surface-variant font-semibold mb-3">
+                      Totals
+                    </h3>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between gap-4">
+                        <span className="text-on-surface-variant">Items</span>
+                        <span className="font-semibold">₹{detail.order.itemsTotal}</span>
+                      </div>
+                      <div className="flex justify-between gap-4">
+                        <span className="text-on-surface-variant">Delivery</span>
+                        <span className="font-semibold">₹{detail.order.deliveryFee}</span>
+                      </div>
+                      <div className="flex justify-between gap-4">
+                        <span className="text-on-surface-variant">Handling</span>
+                        <span className="font-semibold">₹{detail.order.handlingFee}</span>
+                      </div>
+                      <div className="flex justify-between gap-4 pt-2 border-t border-outline-variant">
+                        <span className="font-semibold">Total</span>
+                        <span className="font-bold text-primary">₹{detail.order.totalAmount}</span>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
+              {nextAction && detail && (
+                <>
+                  <button
+                    type="button"
+                    disabled={advanceStatus.isPending || Boolean(blockedReason)}
+                    onClick={() => advanceStatus.mutate(nextAction.next)}
+                    className="w-full mt-8 flex items-center justify-center gap-3 px-6 py-5 rounded-full bg-primary text-primary-foreground text-xl font-semibold shadow-lg shadow-primary/20 disabled:opacity-50"
+                  >
+                    <span className="material-symbols-outlined">local_shipping</span>
+                    {nextAction.label}
+                  </button>
+                  {blockedReason && (
+                    <p className="text-xs text-destructive text-center mt-3">{blockedReason}</p>
+                  )}
+                </>
+              )}
+            </section>
+          )}
         </div>
       </div>
 
@@ -660,7 +756,10 @@ function Orders() {
                     </p>
                     <dl className="rounded-xl border border-outline-variant divide-y divide-outline-variant overflow-hidden">
                       {detailItem.specs.map((spec) => (
-                        <div key={spec.key} className="flex items-center justify-between gap-4 px-3 py-2 text-sm">
+                        <div
+                          key={spec.key}
+                          className="flex items-center justify-between gap-4 px-3 py-2 text-sm"
+                        >
                           <dt className="text-on-surface-variant">{spec.key}</dt>
                           <dd className="font-semibold text-on-surface text-right">{spec.value}</dd>
                         </div>

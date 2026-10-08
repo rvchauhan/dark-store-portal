@@ -123,7 +123,7 @@ function Ledger() {
 
       {!storeId && (
         <p className="mb-4 text-sm text-destructive">
-          No store on session — login as manager@qcommerce.io.
+          No store on session — sign in with a store manager account.
         </p>
       )}
 

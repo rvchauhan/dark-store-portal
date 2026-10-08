@@ -13,6 +13,7 @@ const adminNav: NavItem[] = [
   { to: "/admin/dark-stores", icon: "store", label: "Dark Stores" },
   { to: "/admin/inventory-mapping", icon: "map_search", label: "Inventory" },
   { to: "/admin/pricing", icon: "payments", label: "Pricing" },
+  { to: "/admin/vendor-sync", icon: "sync", label: "Vendor Sync" },
   { to: "/admin/analytics", icon: "monitoring", label: "Analytics" },
 ];
 
@@ -70,6 +71,8 @@ export function AppShell({
       .join("") ?? "";
 
   useEffect(() => {
+    // Wait until client hydration — SSR snapshot is always null.
+    if (session === undefined) return;
     if (!session) navigate({ to: "/auth" });
     else if (session.role !== role)
       navigate({ to: session.role === "admin" ? "/admin" : "/manager" });

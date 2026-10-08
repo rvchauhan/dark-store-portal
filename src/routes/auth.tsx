@@ -126,9 +126,6 @@ function AuthPage() {
           </Link>
         </p>
 
-        <p className="mt-4 text-center text-[11px] text-on-surface-variant">
-          Demo: admin@qcommerce.io / manager@qcommerce.io — password <span className="font-semibold">abcd123</span>
-        </p>
       </AuthCard>
     </AuthMarketingLayout>
   );
